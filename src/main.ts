@@ -2,28 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import './style.css';
 
-interface Building {
-  id: string;
-  name?: string;
-  h: number;
-  b: number;
-  fp: number[];
-  usage?: string;
-  floors?: number;
-  basement?: number;
-  year?: number;
-  structure?: string;
-  flood?: number;
-  area?: number;
-}
-
-interface AreaData {
-  name: string;
-  origin: { lat: number; lon: number };
-  source: string;
-  count: number;
-  buildings: Building[];
-}
+import type { AreaData, Building, Feature, WorldContext } from './types';
+import { FEATURES } from './features';
 
 type ColorMode = 'aqua' | 'height' | 'flood';
 
@@ -51,7 +31,8 @@ controls.maxPolarAngle = Math.PI * 0.49;
 controls.minDistance = 12;
 controls.maxDistance = 900;
 
-scene.add(new THREE.HemisphereLight('#ffffff', '#bfe6f2', 1.6));
+const hemi = new THREE.HemisphereLight('#ffffff', '#bfe6f2', 1.6);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight('#ffffff', 1.4);
 sun.position.set(300, 500, 200);
 sun.castShadow = true;
@@ -322,13 +303,64 @@ avatar.position.set(-60, 0, 40); // 東京駅丸の内駅前広場付近
 camera.position.set(-20, 360, 600);
 controls.target.set(-60, 5, 40);
 
-fetch(`${import.meta.env.BASE_URL}data/marunouchi.json`)
-  .then((r) => r.json())
-  .then((d: AreaData) => buildCity(d))
-  .catch((err) => {
-    console.error(err);
-    document.getElementById('stats')!.textContent = 'データ読み込みに失敗しました';
-  });
+let currentArea: AreaData | null = null;
+
+const ctx: WorldContext = {
+  scene,
+  camera,
+  renderer,
+  avatar,
+  sun,
+  hemi,
+  getBuildings: () => buildingMeshes,
+  getArea: () => currentArea,
+  teleport(x: number, z: number) {
+    const dx = x - avatar.position.x;
+    const dz = z - avatar.position.z;
+    avatar.position.x = x;
+    avatar.position.z = z;
+    camera.position.x += dx;
+    camera.position.z += dz;
+    controls.target.set(x, 5, z);
+  },
+  leftStack: document.getElementById('left-stack')!,
+};
+
+const features: Feature[] = [];
+for (const factory of FEATURES) {
+  try {
+    features.push(factory(ctx));
+  } catch (err) {
+    console.error('feature init failed', err);
+  }
+}
+
+async function loadArea(id: string) {
+  const res = await fetch(`${import.meta.env.BASE_URL}data/${id}.json`);
+  const d = (await res.json()) as AreaData;
+  d.id ??= id;
+  select(null);
+  for (const m of buildingMeshes) {
+    m.geometry.dispose();
+    (m.material as THREE.Material).dispose();
+    buildingGroup.remove(m);
+  }
+  buildingMeshes.length = 0;
+  currentArea = d;
+  buildCity(d);
+  for (const f of features) {
+    try {
+      f.onAreaLoaded?.(d, buildingMeshes);
+    } catch (err) {
+      console.error('feature onAreaLoaded failed', err);
+    }
+  }
+}
+
+loadArea('marunouchi').catch((err) => {
+  console.error(err);
+  document.getElementById('stats')!.textContent = 'データ読み込みに失敗しました';
+});
 
 setTimeout(() => document.getElementById('title')!.classList.add('fade'), 2600);
 
@@ -344,6 +376,7 @@ renderer.setAnimationLoop(() => {
   const t = clock.elapsedTime;
   updateAvatar(dt, t);
   updateCubes(t, dt);
+  for (const f of features) f.update?.(dt, t);
   controls.update();
   renderer.render(scene, camera);
 });

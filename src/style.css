@@ -83,6 +83,28 @@ html, body {
   flex-wrap: wrap;
 }
 
+.left-stack {
+  position: fixed;
+  top: 64px;
+  left: 16px;
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100vh - 330px);
+  overflow-y: auto;
+}
+
+/* Glass card used by feature panels inside #left-stack */
+.card {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
 .panel {
   position: fixed;
   background: var(--glass);
