@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TOKYO TWIN | PLATEAU Metaverse</title>
+    <meta name="description" content="国土交通省 Project PLATEAU の3D都市モデルで作った東京のメタバース空間" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="title" class="title">
+      <h1>TOKYO TWIN</h1>
+      <p>PLATEAU 3D City Metaverse</p>
+    </div>
+
+    <header class="hud-top">
+      <div class="chip area" id="area-name">丸の内・東京駅</div>
+      <div class="chip" id="stats">loading…</div>
+    </header>
+
+    <aside class="panel modes">
+      <div class="panel-label">COLOR MODE</div>
+      <div class="mode-buttons">
+        <button data-mode="aqua" class="active">Aqua</button>
+        <button data-mode="height">高さ</button>
+        <button data-mode="flood">浸水リスク</button>
+      </div>
+      <div id="legend" class="legend"></div>
+    </aside>
+
+    <aside class="panel info hidden" id="info">
+      <button class="close" id="info-close" aria-label="閉じる">×</button>
+      <div class="panel-label">PLATEAU BUILDING</div>
+      <h2 id="info-name">-</h2>
+      <dl id="info-body"></dl>
+    </aside>
+
+    <div class="help">WASD / 矢印キーで移動 ・ ドラッグで視点回転 ・ ホイールでズーム ・ 建物クリックで属性表示</div>
+
+    <footer class="credit">
+      出典：<a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener">国土交通省 Project PLATEAU</a>
+      「3D都市モデル 東京都23区（2022年度）」を加工して作成
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
