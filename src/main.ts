@@ -38,14 +38,15 @@ controls.maxDistance = 900;
 const hemi = new THREE.HemisphereLight('#ffffff', '#bfe6f2', 1.6);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight('#ffffff', 1.4);
-sun.position.set(300, 500, 200);
+sun.position.set(560, 940, 370);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 // buildings are DoubleSide, so lit faces are in the shadow map too: bias against acne
-sun.shadow.bias = -0.0005;
-sun.shadow.normalBias = 0.4;
 const sc = sun.shadow.camera as THREE.OrthographicCamera;
-sc.left = -400; sc.right = 400; sc.top = 400; sc.bottom = -400; sc.far = 1500;
+sc.left = -400; sc.right = 400; sc.top = 400; sc.bottom = -400; sc.far = 2300;
+// bias is in normalized depth: keep it ~0.75 m in world units for the deeper shadow camera
+sun.shadow.bias = -0.0005 * 1500 / sc.far;
+sun.shadow.normalBias = 0.4;
 scene.add(sun);
 scene.add(sun.target);
 
@@ -227,7 +228,30 @@ function mergeChunk(list: THREE.Mesh[]): THREE.BufferGeometry {
   return merged;
 }
 
+// outlines of the taller buildings, merged into one line object per chunk (built in idle time)
+const edgeQueue: { chunk: THREE.Mesh; tall: THREE.Mesh[] }[] = [];
+const idle: (cb: () => void) => void =
+  'requestIdleCallback' in window ? (cb) => window.requestIdleCallback(cb, { timeout: 200 }) : (cb) => setTimeout(cb, 16);
+
+function scheduleEdges(version: number) {
+  idle(() => {
+    if (version !== cityVersion) return; // area switched: the queue was cleared
+    const job = edgeQueue.shift();
+    if (!job) return;
+    const edges = job.tall.map((p) => new THREE.EdgesGeometry(p.geometry, 30));
+    const edgeGeo = mergeGeometries(edges, false);
+    for (const e of edges) e.dispose();
+    if (edgeGeo) {
+      const lines = new THREE.LineSegments(edgeGeo, edgeMat);
+      lines.raycast = () => {};
+      job.chunk.add(lines);
+    }
+    scheduleEdges(version);
+  });
+}
+
 function clearCity() {
+  edgeQueue.length = 0;
   for (const m of buildingMeshes) m.geometry.dispose();
   buildingMeshes.length = 0;
   chunkRanges.clear();
@@ -263,25 +287,14 @@ function buildCity(data: AreaData) {
     chunk.castShadow = true;
     chunk.receiveShadow = true;
     chunk.raycast = () => {}; // picking goes through the per-building proxies
-    // outline the taller buildings, merged into one line object per chunk
-    const edges: THREE.BufferGeometry[] = [];
-    for (const p of list) {
-      if ((p.userData.building as Building).h > 25) edges.push(new THREE.EdgesGeometry(p.geometry, 30));
-    }
-    if (edges.length) {
-      const edgeGeo = mergeGeometries(edges, false);
-      for (const e of edges) e.dispose();
-      if (edgeGeo) {
-        const lines = new THREE.LineSegments(edgeGeo, edgeMat);
-        lines.raycast = () => {};
-        chunk.add(lines);
-      }
-    }
     buildingGroup.add(chunk);
     chunkMeshes.push(chunk);
+    const tall = list.filter((p) => (p.userData.building as Building).h > 25);
+    if (tall.length) edgeQueue.push({ chunk, tall });
   }
   cityVersion++;
-  buildCollisionGrid(data.buildings);
+  scheduleEdges(cityVersion);
+  buildCollisionGrid(buildingMeshes);
   applyColorMode(colorMode);
   document.getElementById('stats')!.textContent = `${data.count.toLocaleString()} buildings`;
 }
@@ -378,6 +391,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   raycaster.setFromCamera(pointer, camera);
   camera.position.copy(saved);
   camera.updateMatrixWorld();
+  raycaster.far = (scene.fog as THREE.Fog).far * 0.95; // invisible buildings in the haze are not clickable
   const hit = raycaster.intersectObjects(buildingMeshes, false)[0];
   select(hit ? (hit.object as THREE.Mesh) : null);
 });
@@ -397,10 +411,15 @@ document.querySelectorAll<HTMLButtonElement>('.mode-buttons button').forEach((bt
 // ---------- input ----------
 // KeyboardEvent.code keeps WASD working while a Japanese IME is on
 const keys = new Set<string>();
-const isFormField = (t: EventTarget | null) =>
-  t instanceof HTMLElement && !!t.closest('input, textarea, select, [contenteditable]');
+const SLIDER_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
+/** the focused control needs this key itself (text fields: all keys; sliders: arrows / paging only) */
+const controlWantsKey = (e: KeyboardEvent) => {
+  const t = e.target;
+  if (t instanceof HTMLInputElement && t.type === 'range') return SLIDER_KEYS.has(e.code);
+  return t instanceof HTMLElement && !!t.closest('input, textarea, select, [contenteditable]');
+};
 window.addEventListener('keydown', (e) => {
-  if (isFormField(e.target)) return; // arrow keys on a slider change the slider, not the avatar
+  if (controlWantsKey(e)) return; // arrow keys on a slider change the slider, not the avatar
   if (e.code === 'Space') e.preventDefault(); // Space floats; never "clicks" a focused button
   keys.add(e.code);
 });
@@ -461,19 +480,27 @@ const STEP = 1.5;
 interface FootprintRef {
   fp: number[];
   h: number;
+  /** LOD2 mesh in meters (same buffers as the picking proxy): the drawn shape is what we stand on */
+  pos?: ArrayLike<number>;
+  idx?: ArrayLike<number>;
 }
 let collisionGrid = new Map<string, FootprintRef[]>();
 
-function buildCollisionGrid(buildings: Building[]) {
+function buildCollisionGrid(proxies: THREE.Mesh[]) {
   collisionGrid = new Map();
-  for (const b of buildings) {
+  for (const p of proxies) {
+    const b = p.userData.building as Building;
     if (b.h < 2 || b.fp.length < 6) continue;
     let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
     for (let i = 0; i < b.fp.length; i += 2) {
       minX = Math.min(minX, b.fp[i]); maxX = Math.max(maxX, b.fp[i]);
       minZ = Math.min(minZ, b.fp[i + 1]); maxZ = Math.max(maxZ, b.fp[i + 1]);
     }
-    const ref = { fp: b.fp, h: b.h };
+    const ref: FootprintRef = { fp: b.fp, h: b.h };
+    if (b.g && p.geometry.index) {
+      ref.pos = p.geometry.getAttribute('position').array;
+      ref.idx = p.geometry.index.array;
+    }
     for (let cx = Math.floor(minX / CELL); cx <= Math.floor(maxX / CELL); cx++) {
       for (let cz = Math.floor(minZ / CELL); cz <= Math.floor(maxZ / CELL); cz++) {
         const key = `${cx},${cz}`;
@@ -494,11 +521,34 @@ function insidePolygon(x: number, z: number, fp: number[]): boolean {
   return inside;
 }
 
-/** roof height under a point (0 = street) */
+/** highest LOD2 surface above (x, z): max height of the triangles whose ground projection contains the point */
+function lod2TopAt(pos: ArrayLike<number>, idx: ArrayLike<number>, x: number, z: number): number {
+  let top = 0;
+  for (let k = 0; k < idx.length; k += 3) {
+    const a = idx[k] * 3, b = idx[k + 1] * 3, c = idx[k + 2] * 3;
+    const ax = pos[a], az = pos[a + 2], bx = pos[b], bz = pos[b + 2], cx = pos[c], cz = pos[c + 2];
+    const det = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+    if (Math.abs(det) < 1e-6) continue; // vertical wall: no footprint
+    const l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / det;
+    const l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / det;
+    const l3 = 1 - l1 - l2;
+    if (l1 < -1e-4 || l2 < -1e-4 || l3 < -1e-4) continue;
+    const y = l1 * pos[a + 1] + l2 * pos[b + 1] + l3 * pos[c + 1];
+    if (y > top) top = y;
+  }
+  return top;
+}
+
+/** roof height under a point (0 = street), following the drawn LOD2 shape when there is one */
 function roofAt(x: number, z: number): number {
   const list = collisionGrid.get(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`);
   let h = 0;
-  if (list) for (const f of list) if (f.h > h && insidePolygon(x, z, f.fp)) h = f.h;
+  if (list) {
+    for (const f of list) {
+      // f.h (measured height) is an upper bound, so it prunes most buildings cheaply
+      if (f.h > h && insidePolygon(x, z, f.fp)) h = Math.max(h, f.pos && f.idx ? lod2TopAt(f.pos, f.idx, x, z) : f.h);
+    }
+  }
   return h;
 }
 
@@ -542,20 +592,34 @@ function updateAvatar(dt: number, t: number) {
   if (down('KeyS', 'ArrowDown')) move.sub(forward);
   if (down('KeyD', 'ArrowRight')) move.add(right);
   if (down('KeyA', 'ArrowLeft')) move.sub(right);
-  if (stick.active) move.addScaledVector(forward, -stick.y).addScaledVector(right, stick.x);
+  const keyMove = move.lengthSq() > 0;
+  // joystick: 20 % dead zone, then speed proportional to how far it is pushed
+  const mag = Math.hypot(stick.x, stick.y);
+  const analog = stick.active && mag > 0.2 ? Math.min(1, (mag - 0.2) / 0.8) : 0;
+  if (analog > 0) move.addScaledVector(forward, -stick.y).addScaledVector(right, stick.x);
   const y = avatar.position.y;
-  const speed = (down('ShiftLeft', 'ShiftRight') ? 90 : 35) * (y > 20 ? 1.6 : 1);
+  const speed = (down('ShiftLeft', 'ShiftRight') ? 90 : 35) * (y > 20 ? 1.6 : 1) * (keyMove ? 1 : analog);
   before.copy(avatar.position);
-  if (move.lengthSq() > 0) {
+  if (move.lengthSq() > 0 && speed > 0) {
     move.normalize().multiplyScalar(speed * dt);
     // slide along building walls; anything lower than our feet (+ a step) can be walked / floated over
-    const nx = avatar.position.x + move.x;
-    const nz = avatar.position.z + move.z;
     const limit = y + STEP;
-    if (bodyRoofAt(nx, nz) > limit) {
-      if (bodyRoofAt(nx, avatar.position.z) <= limit) move.z = 0;
-      else if (bodyRoofAt(avatar.position.x, nz) <= limit) move.x = 0;
-      else move.set(0, 0, 0);
+    const free = (mx: number, mz: number) => bodyRoofAt(avatar.position.x + mx, avatar.position.z + mz) <= limit;
+    if (!free(move.x, move.z)) {
+      // try the move turned by up to 70 degrees (shortened by cos) so we glide along rotated facades
+      let slid = false;
+      for (const deg of [25, -25, 50, -50, 70, -70]) {
+        const r = THREE.MathUtils.degToRad(deg);
+        const c = Math.cos(r), s = Math.sin(r);
+        const mx = (move.x * c - move.z * s) * c;
+        const mz = (move.x * s + move.z * c) * c;
+        if (free(mx, mz)) {
+          move.set(mx, 0, mz);
+          slid = true;
+          break;
+        }
+      }
+      if (!slid) move.set(0, 0, 0);
     }
     avatar.position.add(move);
     if (move.lengthSq() > 0) avatar.rotation.y = Math.atan2(move.x, move.z);
@@ -563,6 +627,7 @@ function updateAvatar(dt: number, t: number) {
 
   // fluffy floating: hold Space (or the float button) to rise, release to drift down slowly
   if (down('Space') || floatHeld) vy = Math.min(vy + 34 * dt, 26);
+  else if (vy > 0) vy = Math.max(vy - 45 * dt, 0); // stop climbing soon after release
   else vy = Math.max(vy - 7 * dt, -14);
   avatar.position.y += vy * dt;
   // a roof is only a floor if we are above it (walking into a wall never teleports us up)
@@ -576,13 +641,18 @@ function updateAvatar(dt: number, t: number) {
     avatar.position.y = MAX_FLOAT;
     vy = Math.min(vy, 0);
   }
-  // the camera travels with the avatar (orbit offset stays the same)
-  camera.position.add(followTarget.subVectors(avatar.position, before));
+  // camera and orbit target travel with the avatar, so the orbit offset never changes
+  followTarget.subVectors(avatar.position, before);
+  camera.position.add(followTarget);
+  controls.target.add(followTarget);
+  // then ease the target back onto the avatar (e.g. after a pan), moving the camera along with it
+  followTarget.set(avatar.position.x, avatar.position.y + 5, avatar.position.z).sub(controls.target);
+  followTarget.multiplyScalar(1 - Math.exp(-10 * dt));
+  controls.target.add(followTarget);
+  camera.position.add(followTarget);
 
   animateAvatar(t, dt, avatar.position.y - floor);
-  followTarget.set(avatar.position.x, avatar.position.y + 5, avatar.position.z);
-  controls.target.lerp(followTarget, 0.2);
-  sun.position.set(avatar.position.x + 300, 500, avatar.position.z + 200);
+  sun.position.set(avatar.position.x + 560, 940, avatar.position.z + 370);
   sun.target.position.set(avatar.position.x, 0, avatar.position.z);
 }
 
@@ -711,9 +781,12 @@ setTimeout(() => document.getElementById('title')!.classList.add('fade'), 2600);
 
 // operation panels can be hidden so they never block the view (button or H key; remembered per browser)
 const panelToggle = document.getElementById('panel-toggle')!;
-function setPanels(open: boolean) {
+function applyPanels(open: boolean) {
   document.body.classList.toggle('panels-hidden', !open);
   panelToggle.setAttribute('aria-pressed', String(open));
+}
+function setPanels(open: boolean) {
+  applyPanels(open);
   try {
     localStorage.setItem('tokyo-twin:panels', open ? '1' : '0');
   } catch {
@@ -727,10 +800,12 @@ try {
   /* ignore */
 }
 // phones start with the panels closed so the city is visible
-setPanels(savedPanels ? savedPanels === '1' : !window.matchMedia('(max-width: 640px)').matches);
+applyPanels(
+  savedPanels ? savedPanels === '1' : !window.matchMedia('(max-width: 640px), (max-height: 500px) and (pointer: coarse)').matches
+);
 panelToggle.addEventListener('click', () => setPanels(document.body.classList.contains('panels-hidden')));
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyH' && !e.repeat && !isFormField(e.target)) setPanels(document.body.classList.contains('panels-hidden'));
+  if (e.code === 'KeyH' && !e.repeat && !controlWantsKey(e)) setPanels(document.body.classList.contains('panels-hidden'));
 });
 
 window.addEventListener('resize', () => {
@@ -745,17 +820,37 @@ const camRay = new THREE.Raycaster();
 const camDesired = new THREE.Vector3();
 const camDir = new THREE.Vector3();
 
+const clampKeyCam = new THREE.Vector3(Infinity, 0, 0);
+const clampKeyTarget = new THREE.Vector3();
+const clampResult = new THREE.Vector3();
+let clampVersion = -1;
+let clampHit = false;
+
 function renderWithCameraClamp() {
   camDesired.copy(camera.position);
-  camDir.subVectors(camera.position, controls.target);
-  const dist = camDir.length();
-  if (dist > 0.001) {
-    camDir.divideScalar(dist);
-    camRay.set(controls.target, camDir);
-    camRay.far = dist;
-    const hit = camRay.intersectObjects(buildingMeshes, false)[0];
-    if (hit) camera.position.copy(controls.target).addScaledVector(camDir, Math.max(hit.distance - 2, 2));
+  const unchanged =
+    clampVersion === cityVersion &&
+    clampKeyCam.distanceToSquared(camera.position) < 1e-6 &&
+    clampKeyTarget.distanceToSquared(controls.target) < 1e-6;
+  if (!unchanged) {
+    clampKeyCam.copy(camera.position);
+    clampKeyTarget.copy(controls.target);
+    clampVersion = cityVersion;
+    clampHit = false;
+    camDir.subVectors(camera.position, controls.target);
+    const dist = camDir.length();
+    if (dist > 0.001) {
+      camDir.divideScalar(dist);
+      camRay.set(controls.target, camDir);
+      camRay.far = dist;
+      const hit = camRay.intersectObjects(buildingMeshes, false)[0];
+      if (hit) {
+        clampHit = true;
+        clampResult.copy(controls.target).addScaledVector(camDir, Math.max(hit.distance - 2, hit.distance * 0.5));
+      }
+    }
   }
+  if (clampHit) camera.position.copy(clampResult);
   if (camera.position.y < 1) camera.position.y = 1;
   renderer.render(scene, camera);
   camRendered.copy(camera.position);
@@ -784,7 +879,7 @@ function updateShadows() {
   }
 }
 
-if (import.meta.env.DEV) Object.assign(window, { __world: { ctx, controls } }); // debugging aid
+if (import.meta.env.DEV) Object.assign(window, { __world: { ctx, controls, roofAt, updateAvatar } }); // debugging aid
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {

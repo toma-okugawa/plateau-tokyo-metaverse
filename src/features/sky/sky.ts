@@ -634,7 +634,8 @@ export const createSky: FeatureFactory = (ctx): Feature => {
       skyGroup.position.copy(ctx.camera.position);
 
       // Orbit sun relative to avatar (runs AFTER main.ts moved the sun)
-      ctx.sun.position.copy(ctx.avatar.position).addScaledVector(sunDirection, 600);
+      // far enough that low sunrise / sunset light still reaches the tops of 250 m towers
+      ctx.sun.position.copy(ctx.avatar.position).addScaledVector(sunDirection, 1400);
       ctx.sun.target.position.copy(ctx.avatar.position);
     },
   };

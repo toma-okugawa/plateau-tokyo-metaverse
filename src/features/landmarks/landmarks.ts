@@ -73,9 +73,6 @@ export const createLandmarks: FeatureFactory = (ctx) => {
   list.setAttribute('role', 'list');
 
   card.append(title, search, list);
-  // Keep WASD / arrow keys from moving the avatar while the panel is focused.
-  card.addEventListener('keydown', (e) => e.stopPropagation());
-  card.addEventListener('keyup', (e) => e.stopPropagation());
   ctx.leftStack.append(card);
 
   let named: NamedMark[] = [];
@@ -106,7 +103,11 @@ export const createLandmarks: FeatureFactory = (ctx) => {
         row.append(nameEl, heightEl);
         row.addEventListener('click', () => {
           ctx.teleport(item.cx, item.cz + SOUTH_M);
+          // look at the landmark from the south, keeping the current orbit distance
+          const d = Math.max(60, ctx.camera.position.distanceTo(ctx.avatar.position));
+          ctx.camera.position.set(ctx.avatar.position.x, ctx.avatar.position.y + d * 0.45, ctx.avatar.position.z + d * 0.89);
           window.dispatchEvent(new CustomEvent<Building>('plateau:focus', { detail: item.building }));
+          row.blur(); // keys go back to the world (Space must not re-activate this row)
         });
         frag.append(row);
       }
