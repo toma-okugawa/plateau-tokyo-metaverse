@@ -17,7 +17,13 @@ export interface Building {
   structure?: string;
   /** max expected river-flood inundation depth (m) from PLATEAU flood risk attributes */
   flood?: number;
+  /** PLATEAU inundation rank code (1: <0.5m, 2: 0.5-3m, 3: 3-5m, 4: 5-10m, 5: 10-20m, 6: >=20m) */
+  floodRank?: number;
+  /** river whose flooding scenario produced `flood` */
+  floodRiver?: string;
   area?: number;
+  /** LOD2 mesh: positions [x, y, z, ...] in decimeters (y = height above b), triangle indices */
+  g?: { p: number[]; i: number[] };
 }
 
 export interface AreaData {

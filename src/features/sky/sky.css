@@ -1,0 +1,122 @@
+.sky-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sky-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sky-title {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+  font-weight: 800;
+}
+
+.sky-time-badge {
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--aqua-deep);
+  background: rgba(25, 182, 216, 0.12);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.sky-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sky-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #0d1b38 0%,
+    #f29b7e 24%,
+    #82d8ef 52%,
+    #e5857b 75%,
+    #0d1b38 100%
+  );
+  outline: none;
+  cursor: pointer;
+}
+
+.sky-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--aqua-deep);
+  box-shadow: 0 2px 6px rgba(10, 80, 120, 0.28);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.sky-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+
+.sky-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--aqua-deep);
+  box-shadow: 0 2px 6px rgba(10, 80, 120, 0.28);
+  cursor: pointer;
+}
+
+.sky-controls {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.sky-preset-btn,
+.sky-play-btn {
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.sky-preset-btn {
+  flex: 1;
+  text-align: center;
+}
+
+.sky-play-btn {
+  min-width: 58px;
+  text-align: center;
+}
+
+.sky-preset-btn:hover,
+.sky-play-btn:hover {
+  border-color: var(--aqua);
+  background: #ffffff;
+}
+
+.sky-preset-btn.active,
+.sky-play-btn.active {
+  background: linear-gradient(90deg, var(--aqua-deep), var(--aqua));
+  color: #ffffff;
+  border-color: transparent;
+}
