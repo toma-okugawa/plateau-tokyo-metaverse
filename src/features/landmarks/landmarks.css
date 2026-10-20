@@ -1,0 +1,117 @@
+.lm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--ink, #0b3b5c);
+}
+
+.lm-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--aqua-deep, #0a6fc2);
+}
+
+.lm-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--glass-border, rgba(25, 182, 216, 0.25));
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink, #0b3b5c);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+}
+
+.lm-search::placeholder {
+  color: var(--ink-soft, #4a7390);
+  font-weight: 600;
+}
+
+.lm-search:focus {
+  border-color: var(--aqua, #19b6d8);
+  box-shadow: 0 0 0 3px rgba(25, 182, 216, 0.16);
+}
+
+.lm-list {
+  max-height: 180px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+.lm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lm-row:hover {
+  background: rgba(25, 182, 216, 0.14);
+}
+
+.lm-row:focus-visible {
+  outline: 2px solid var(--aqua, #19b6d8);
+  outline-offset: -2px;
+}
+
+.lm-row:active {
+  background: rgba(10, 111, 194, 0.16);
+}
+
+.lm-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.lm-h {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft, #4a7390);
+}
+
+.lm-empty {
+  margin: 0;
+  padding: 4px 4px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft, #4a7390);
+}
+
+.lm-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.lm-list::-webkit-scrollbar-thumb {
+  background: rgba(25, 182, 216, 0.4);
+  border-radius: 999px;
+}

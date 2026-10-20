@@ -103,8 +103,8 @@ const MARKER_FRAGMENT = /* glsl */ `
   void main() {
     vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
     float rim = pow(1.0 - abs(dot(normalize(vNormal), viewDirection)), 2.0);
-    float active = step(uLevel, vDepth);
-    float pulse = active * (0.5 + 0.5 * sin(uTime * 1.8 + vPhase));
+    float isActive = step(uLevel, vDepth); // 'active' is reserved in GLSL ES 3.00
+    float pulse = isActive * (0.5 + 0.5 * sin(uTime * 1.8 + vPhase));
     float cap = smoothstep(0.88, 1.0, vHeight);
     vec3 color = mix(vMarkerColor, vec3(1.0), 0.05 + 0.13 * rim + 0.10 * pulse);
     float alpha = 0.24 + 0.22 * rim + 0.09 * cap + 0.13 * pulse;
@@ -240,7 +240,10 @@ export const createFlood: FeatureFactory = (ctx) => {
 
   function setLevel(level: number): void {
     levelUniform.value = level;
-    if (water) water.position.y = level;
+    if (water) {
+      water.position.y = level;
+      water.visible = level > 0.05; // no water sheet over the whole map at 0 m
+    }
     const tick = Math.round(level * 10);
     if (tick !== levelTick) {
       levelTick = tick;

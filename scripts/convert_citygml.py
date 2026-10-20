@@ -31,8 +31,10 @@ class Projector:
 
     def __init__(self, lat, lon):
         self.lat, self.lon = lat, lon
-        self.kx = 111320.0 * math.cos(math.radians(lat))
-        self.ky = 110574.0
+        phi = math.radians(lat)
+        # metres per degree on the GRS80 ellipsoid at the origin latitude
+        self.kx = 111412.84 * math.cos(phi) - 93.5 * math.cos(3 * phi)
+        self.ky = 111132.954 - 559.822 * math.cos(2 * phi) + 1.175 * math.cos(4 * phi)
 
     def xz(self, lat, lon):
         return (lon - self.lon) * self.kx, -(lat - self.lat) * self.ky

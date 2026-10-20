@@ -43,14 +43,19 @@ export interface WorldContext {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
-  /** player avatar; avatar.position is the player's feet position */
+  /** player avatar; avatar.position is the player's feet position (y > 0 while floating) */
   avatar: THREE.Group;
   sun: THREE.DirectionalLight;
   hemi: THREE.HemisphereLight;
-  /** current building meshes; mesh.userData.building is a Building. Do NOT change their materials. */
+  /**
+   * One proxy mesh per building (mesh.userData.building is a Building), used for picking and analysis.
+   * Proxies are NOT added to the scene and share one material; geometry is in world coordinates.
+   */
   getBuildings(): THREE.Mesh[];
+  /** the visible city: buildings merged into spatial chunks (world-space geometry with normals) */
+  getRenderChunks(): THREE.Mesh[];
   getArea(): AreaData | null;
-  /** move avatar (and camera) to local x/z */
+  /** move avatar (and camera) to local x/z (snapped to the nearest free street spot) */
   teleport(x: number, z: number): void;
   /** vertical stack container on the left side for feature panels (append `.card` elements) */
   leftStack: HTMLElement;

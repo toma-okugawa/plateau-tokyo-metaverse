@@ -21,8 +21,9 @@ OUT = os.path.join(ROOT, 'public', 'data')
 # id, display name, origin (lat, lon), radius (m), 3rd-level mesh codes, spawn [x, z], camera offset [dx, dy, dz]
 AREAS = [
     {
-        'id': 'marunouchi', 'name': '丸の内・東京駅', 'origin': (35.6812, 139.7671), 'radius': 1000,
-        'meshes': ['53394611', '53394621', '53394610', '53394612'],
+        'id': 'marunouchi', 'name': '丸の内・東京駅', 'origin': (35.6812, 139.7671), 'radius': 900,
+        'meshes': ['53394600', '53394601', '53394602', '53394610', '53394611', '53394612',
+                   '53394620', '53394621', '53394622'],
         'start': [-185, 0], 'view': [230, 95, 70],
     },
     {
@@ -32,7 +33,8 @@ AREAS = [
     },
     {
         'id': 'shinjuku', 'name': '新宿', 'origin': (35.6905, 139.6960), 'radius': 900,
-        'meshes': ['53394515', '53394516', '53394525', '53394526', '53394535', '53394536'],
+        'meshes': ['53394514', '53394515', '53394516', '53394524', '53394525', '53394526',
+                   '53394534', '53394535', '53394536'],
         'start': [226, -88], 'view': [170, 130, 140],
     },
 ]
@@ -44,8 +46,11 @@ def extract(meshes):
         wanted = [n for n in names if n.startswith(f'{PREFIX}/codelists/')]
         wanted += [f'{PREFIX}/udx/bldg/{m}_bldg_6697_2_op.gml' for m in meshes]
         for n in wanted:
+            if n not in names:
+                print(f'warning: {n} is not in the archive (no buildings in that mesh)')
+                continue
             dest = os.path.join(EXTRACT, n)
-            if n.endswith('/') or os.path.exists(dest):
+            if n.endswith('/') or (os.path.exists(dest) and os.path.getsize(dest) == z.getinfo(n).file_size):
                 continue
             z.extract(n, EXTRACT)
 
@@ -59,7 +64,10 @@ def convert(area):
         '--origin', str(area['origin'][0]), str(area['origin'][1]), '--radius', str(area['radius']),
         '--lod2', '--codelists', os.path.join(EXTRACT, PREFIX, 'codelists'),
     ]
-    return subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8').stdout.strip()
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
+    if r.returncode != 0:
+        raise RuntimeError(f"{area['id']}: converter failed:\n{r.stderr}")
+    return r.stdout.strip()
 
 
 def main():

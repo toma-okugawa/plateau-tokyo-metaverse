@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AreaData, Building, Feature, FeatureFactory } from '../../types';
+import type { Feature, FeatureFactory } from '../../types';
 import './sky.css';
 
 const NOOP_RAYCAST = (): void => {};
@@ -216,13 +216,14 @@ const STAR_VERTEX_SHADER = /* glsl */ `
   attribute float aPhase;
   uniform float uTime;
   uniform float uStarOpacity;
+  uniform float uPixelRatio;
   varying float vAlpha;
 
   void main() {
     float twinkle = 0.72 + 0.28 * sin(uTime * 1.8 + aPhase);
     vAlpha = uStarOpacity * twinkle;
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = aSize * (1200.0 / max(-mvPosition.z, 200.0));
+    gl_PointSize = max(aSize * uPixelRatio, 2.0); // stars sit at a fixed distance: constant pixel size
     gl_Position = projectionMatrix * mvPosition;
   }
 `;
@@ -477,6 +478,7 @@ export const createSky: FeatureFactory = (ctx): Feature => {
   const starUniforms = {
     uTime: { value: 0 },
     uStarOpacity: { value: 0 },
+    uPixelRatio: { value: ctx.renderer.getPixelRatio() },
   };
 
   const starMat = new THREE.ShaderMaterial({
@@ -514,17 +516,16 @@ export const createSky: FeatureFactory = (ctx): Feature => {
     polygonOffsetUnits: -4,
   });
 
-  function buildWindowOverlays(meshes: THREE.Mesh[]): void {
-    // Clear previous overlay meshes without disposing shared building geometries or sharedWindowMaterial
+  function buildWindowOverlays(): void {
+    // Clear previous overlay meshes without disposing shared chunk geometries or sharedWindowMaterial
     while (windowGroup.children.length > 0) {
       windowGroup.remove(windowGroup.children[windowGroup.children.length - 1]);
     }
 
-    for (let i = 0; i < meshes.length; i++) {
-      const m = meshes[i];
-      const b = m.userData.building as Building | undefined;
-      if (!b || b.h <= 12) continue;
-
+    // one overlay per merged render chunk (not per building) keeps the night city at ~40 draw calls
+    const chunks = ctx.getRenderChunks();
+    for (let i = 0; i < chunks.length; i++) {
+      const m = chunks[i];
       const overlay = new THREE.Mesh(m.geometry, sharedWindowMaterial);
       overlay.position.copy(m.position);
       overlay.rotation.copy(m.rotation);
@@ -592,8 +593,10 @@ export const createSky: FeatureFactory = (ctx): Feature => {
     skyUniforms.uSunDir.value.copy(solarVisualDir);
 
     // For directional light, keep elevation above horizon at night for cool moonlight shadows
-    const lightElev = rawElev >= 0.12 ? rawElev : Math.max(0.28, -rawElev * 0.65);
-    const lightEast = rawElev >= 0 ? rawEast : -rawEast * 0.6;
+    // continuous sun -> moon hand-over so shadows never snap at dawn / dusk
+    const lightElev = Math.max(0.28, rawElev >= 0 ? rawElev : -rawElev * 0.65);
+    const sunW = THREE.MathUtils.smoothstep(rawElev, -0.12, 0.08); // 0 = moon, 1 = sun
+    const lightEast = THREE.MathUtils.lerp(-rawEast * 0.6, rawEast, sunW);
     sunDirection.set(lightEast, lightElev, southOffset).normalize();
 
     // Night factor for stars & building windows (0 by day, fades to 1 at night)
@@ -611,14 +614,11 @@ export const createSky: FeatureFactory = (ctx): Feature => {
   syncUI();
   applyAtmosphere(timeHours);
 
-  const initialBuildings = ctx.getBuildings();
-  if (initialBuildings.length > 0) {
-    buildWindowOverlays(initialBuildings);
-  }
+  if (ctx.getRenderChunks().length > 0) buildWindowOverlays();
 
   return {
-    onAreaLoaded(_area: AreaData, meshes: THREE.Mesh[]): void {
-      buildWindowOverlays(meshes);
+    onAreaLoaded(): void {
+      buildWindowOverlays();
     },
     update(dt: number, t: number): void {
       if (isPlaying) {
