@@ -258,15 +258,26 @@ html, body {
   .joystick, .float-btn { display: block; }
 }
 
-.panel-toggle { display: none; cursor: pointer; color: var(--ink); font-family: inherit; }
+.panel-toggle { cursor: pointer; color: var(--ink); font-family: inherit; }
+.panel-toggle[aria-pressed='true'] {
+  background: linear-gradient(90deg, var(--aqua-deep), var(--aqua));
+  color: #fff;
+  border-color: transparent;
+}
+
+/* panels off: keep only the top HUD (area switch / toggle) and the building info the user opened */
+body.panels-hidden .left-stack,
+body.panels-hidden .modes,
+body.panels-hidden .mm-box,
+body.panels-hidden .help {
+  display: none !important;
+}
 
 @media (max-width: 640px) {
   .modes { top: auto; bottom: 80px; right: 16px; left: 16px; width: auto; }
   .joystick { bottom: 205px; right: 20px; width: 96px; height: 96px; }
   .float-btn { bottom: 222px; right: 130px; }
-  .panel-toggle { display: inline-block; }
   .left-stack {
-    display: none;
     top: 112px;
     left: 16px;
     right: 16px;
@@ -274,7 +285,6 @@ html, body {
     max-height: calc(100vh - 330px);
     z-index: 5;
   }
-  .left-stack.open { display: flex; }
   .info { top: 64px; left: 16px; right: 16px; width: auto; }
   .help { font-size: 10px; }
 }

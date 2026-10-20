@@ -709,11 +709,28 @@ init().catch((err) => {
 
 setTimeout(() => document.getElementById('title')!.classList.add('fade'), 2600);
 
-// small screens: the feature panels live in a drawer opened from the HUD
+// operation panels can be hidden so they never block the view (button or H key; remembered per browser)
 const panelToggle = document.getElementById('panel-toggle')!;
-panelToggle.addEventListener('click', () => {
-  const open = ctx.leftStack.classList.toggle('open');
-  panelToggle.setAttribute('aria-expanded', String(open));
+function setPanels(open: boolean) {
+  document.body.classList.toggle('panels-hidden', !open);
+  panelToggle.setAttribute('aria-pressed', String(open));
+  try {
+    localStorage.setItem('tokyo-twin:panels', open ? '1' : '0');
+  } catch {
+    /* storage unavailable: just don't remember */
+  }
+}
+let savedPanels: string | null = null;
+try {
+  savedPanels = localStorage.getItem('tokyo-twin:panels');
+} catch {
+  /* ignore */
+}
+// phones start with the panels closed so the city is visible
+setPanels(savedPanels ? savedPanels === '1' : !window.matchMedia('(max-width: 640px)').matches);
+panelToggle.addEventListener('click', () => setPanels(document.body.classList.contains('panels-hidden')));
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyH' && !e.repeat && !isFormField(e.target)) setPanels(document.body.classList.contains('panels-hidden'));
 });
 
 window.addEventListener('resize', () => {
