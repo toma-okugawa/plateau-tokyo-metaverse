@@ -217,6 +217,8 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let selected: THREE.Mesh | null = null;
 let downPos = { x: 0, y: 0 };
+/** camera position used for the last rendered frame (may be pulled in front of buildings) */
+const camRendered = new THREE.Vector3();
 
 const USAGE: Record<string, string> = {
   '401': '業務施設', '402': '商業施設', '403': '宿泊施設', '404': '商業系複合施設',
@@ -263,7 +265,13 @@ renderer.domElement.addEventListener('pointerdown', (e) => (downPos = { x: e.cli
 renderer.domElement.addEventListener('pointerup', (e) => {
   if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 5) return;
   pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  // pick from where the frame was actually rendered (see renderWithCameraClamp)
+  const saved = camera.position.clone();
+  camera.position.copy(camRendered);
+  camera.updateMatrixWorld();
   raycaster.setFromCamera(pointer, camera);
+  camera.position.copy(saved);
+  camera.updateMatrixWorld();
   const hit = raycaster.intersectObjects(buildingMeshes, false)[0];
   select(hit ? (hit.object as THREE.Mesh) : null);
 });
@@ -510,8 +518,12 @@ async function init() {
     btn.addEventListener('click', () => loadArea(a));
     sw.appendChild(btn);
   }
-  const fromHash = areas.find((a) => `#${a.id}` === location.hash);
-  await loadArea(fromHash ?? areas[0]);
+  const fromHash = () => areas.find((a) => `#${a.id}` === location.hash);
+  window.addEventListener('hashchange', () => {
+    const a = fromHash();
+    if (a && a.id !== currentArea?.id) loadArea(a);
+  });
+  await loadArea(fromHash() ?? areas[0]);
 }
 
 init().catch((err) => {
@@ -527,6 +539,28 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Third-person "spring arm": if a building stands between the avatar and the camera,
+// render from just in front of it (the orbit distance chosen by the user is kept).
+const camRay = new THREE.Raycaster();
+const camDesired = new THREE.Vector3();
+const camDir = new THREE.Vector3();
+
+function renderWithCameraClamp() {
+  camDesired.copy(camera.position);
+  camDir.subVectors(camera.position, controls.target);
+  const dist = camDir.length();
+  if (dist > 0.001) {
+    camDir.divideScalar(dist);
+    camRay.set(controls.target, camDir);
+    camRay.far = dist;
+    const hit = camRay.intersectObjects(buildingMeshes, false)[0];
+    if (hit) camera.position.copy(controls.target).addScaledVector(camDir, Math.max(hit.distance - 2, 2));
+  }
+  renderer.render(scene, camera);
+  camRendered.copy(camera.position);
+  camera.position.copy(camDesired);
+}
+
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -535,5 +569,5 @@ renderer.setAnimationLoop(() => {
   updateCubes(t, dt);
   for (const f of features) f.update?.(dt, t);
   controls.update();
-  renderer.render(scene, camera);
+  renderWithCameraClamp();
 });
