@@ -39,7 +39,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 scene.background = BG;
-scene.fog = new THREE.Fog(BG, 250, 1400);
+scene.fog = new THREE.Fog(BG, 500, 2200);
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 5000);
 camera.position.set(0, 60, 120);
@@ -319,7 +319,7 @@ function updateAvatar(dt: number, t: number) {
 
 // ---------- start ----------
 avatar.position.set(-60, 0, 40); // 東京駅丸の内駅前広場付近
-camera.position.set(-60, 70, 170);
+camera.position.set(-20, 360, 600);
 controls.target.set(-60, 5, 40);
 
 fetch(`${import.meta.env.BASE_URL}data/marunouchi.json`)
