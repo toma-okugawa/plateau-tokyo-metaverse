@@ -274,7 +274,9 @@ body.panels-hidden .help {
 }
 
 @media (max-width: 640px) {
-  .modes { top: auto; bottom: 80px; right: 16px; left: 16px; width: auto; }
+  .modes { top: auto; bottom: 56px; right: 16px; left: 16px; width: auto; }
+  /* small screens: no minimap / keyboard hint, the drawer and the color panel share the screen */
+  .mm-box, .help { display: none !important; }
   .joystick { bottom: 205px; right: 20px; width: 96px; height: 96px; }
   .float-btn { bottom: 222px; right: 130px; }
   .left-stack {
@@ -282,8 +284,8 @@ body.panels-hidden .help {
     left: 16px;
     right: 16px;
     width: auto;
-    max-height: calc(100vh - 330px);
-    z-index: 5;
+    max-height: calc(100vh - 310px);
+    z-index: 6;
   }
   .info { top: 64px; left: 16px; right: 16px; width: auto; }
   .help { font-size: 10px; }
